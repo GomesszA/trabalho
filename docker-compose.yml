@@ -1,0 +1,76 @@
+services:
+
+  mongo:
+    image: mongo:7
+    container_name: mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - app_network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"   # protocolo AMQP
+      - "15672:15672" # painel de management (usuário/senha padrão: guest/guest)
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-1:
+    build: ./api
+    container_name: api-1
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - INSTANCE_ID=api-1
+      - MONGO_URI=mongodb://mongo:27017/usuarios_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    depends_on:
+      - mongo
+      - rabbitmq
+    networks:
+      - app_network
+
+  api-2:
+    build: ./api
+    container_name: api-2
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - INSTANCE_ID=api-2
+      - MONGO_URI=mongodb://mongo:27017/usuarios_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    depends_on:
+      - mongo
+      - rabbitmq
+    networks:
+      - app_network
+
+  gateway:
+    build: ./gateway
+    container_name: gateway
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - api-1
+      - api-2
+    networks:
+      - app_network
+
+volumes:
+  mongo_data:
+
+networks:
+  app_network:
+    driver: bridge
